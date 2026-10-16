@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Montney–Duvernay Oil Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: full-height app — map canvas left, analyst panel right (stacks on phones). Core-sample palette: shale slate + oil-amber ramp. */
+:root{
+  --bg:#eef1f1; --panel:#fbfcfc; --ink:#1c2528; --muted:#5d6b70; --line:#d5dcdd;
+  --land:#e3e8e5; --landline:#a9b5b3; --water:#d7e2e6;
+  --accent:#0f6b73; --accent-ink:#ffffff; --sel:#d1495b;
+  --r0:#f2e8c9; --r1:#e9c46a; --r2:#e08e3c; --r3:#b8432f; --r4:#5c1d2e;
+  --duv:#2a3b8f;
+  --f-display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --f-body:"Barlow","Segoe UI",Helvetica,Arial,sans-serif;
+  --f-data:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#121819; --panel:#182022; --ink:#e3ebec; --muted:#93a3a7; --line:#2c393c;
+  --land:#1d2729; --landline:#45585b; --water:#16242a;
+  --accent:#4fb3bc; --accent-ink:#0b1213; --sel:#ff6b7f;
+  --r0:#3a3420; --r1:#9c7a2a; --r2:#d98a3a; --r3:#f0b45a; --r4:#fff1b8;
+  --duv:#9fb0ff; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#121819; --panel:#182022; --ink:#e3ebec; --muted:#93a3a7; --line:#2c393c;
+  --land:#1d2729; --landline:#45585b; --water:#16242a;
+  --accent:#4fb3bc; --accent-ink:#0b1213; --sel:#ff6b7f;
+  --r0:#3a3420; --r1:#9c7a2a; --r2:#d98a3a; --r3:#f0b45a; --r4:#fff1b8;
+  --duv:#9fb0ff; color-scheme:dark}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.45}
+*{box-sizing:border-box}
+button,select,input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.app{height:100%;display:grid;grid-template-rows:auto 1fr;}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;padding-block:10px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));border-bottom:1px solid var(--line);background:var(--panel)}
+header h1{font-family:var(--f-display);font-weight:700;font-size:22px;letter-spacing:.01em;margin:0;text-wrap:balance}
+header .sub{color:var(--muted);font-size:12.5px}
+.ctrls{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin-left:auto}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{border:0;background:transparent;padding:5px 10px;cursor:pointer;font-family:var(--f-display);font-weight:600;font-size:14px;letter-spacing:.03em;text-transform:uppercase}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.ctrls label{font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.ctrls select{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:4px 6px;max-width:220px}
+main{display:grid;grid-template-columns:minmax(0,1fr) 400px;min-height:0}
+#map{min-height:300px;background:var(--water);position:relative}
+aside{border-left:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;min-height:0;min-width:0}
+.tabs{display:flex;border-bottom:1px solid var(--line)}
+.tabs button{flex:1;border:0;background:none;padding:10px 6px;cursor:pointer;font-family:var(--f-display);font-weight:600;font-size:15px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);border-bottom:2px solid transparent}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+.pane{overflow:auto;padding:14px 16px 24px;flex:1;min-height:0}
+.eyebrow{font-family:var(--f-display);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+h2{font-family:var(--f-display);font-size:21px;font-weight:700;margin:2px 0 2px;line-height:1.15;text-wrap:balance}
+h3{font-family:var(--f-display);font-size:16px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;margin:18px 0 6px}
+.uwi{font-family:var(--f-data);font-size:12.5px;color:var(--muted)}
+.kv{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 14px;margin-top:12px}
+.kv div{min-width:0}
+.kv dt{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.kv dd{margin:0;font-family:var(--f-data);font-size:13.5px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.big{display:flex;gap:18px;margin-top:10px;flex-wrap:wrap}
+.big .v{font-family:var(--f-display);font-size:30px;font-weight:700;line-height:1}
+.big .u{font-size:12px;color:var(--muted)}
+table{border-collapse:collapse;width:100%;font-size:12.5px}
+th{text-align:left;font-weight:600;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding:6px 6px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--panel)}
+td{padding:5px 6px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+td.n,th.n{text-align:right;font-family:var(--f-data)}
+tr.click{cursor:pointer}
+tr.click:hover td{background:color-mix(in srgb,var(--accent) 9%,transparent)}
+tr.me td{background:color-mix(in srgb,var(--sel) 14%,transparent);font-weight:600}
+.tw{overflow-x:auto}
+.pill{display:inline-block;padding:1px 7px;border-radius:999px;font-size:11.5px;font-weight:600;border:1px solid var(--line)}
+.pill.m{color:var(--r3);border-color:currentColor}
+.pill.d{color:var(--duv);border-color:currentColor}
+.pct{display:flex;align-items:center;gap:8px;margin-top:6px}
+.pct .bar{flex:1;height:8px;border-radius:4px;background:linear-gradient(90deg,var(--r0),var(--r1),var(--r2),var(--r3),var(--r4));position:relative}
+.pct .tick{position:absolute;top:-4px;width:3px;height:16px;background:var(--ink);border-radius:2px;transform:translateX(-1px)}
+.note{font-size:12.5px;color:var(--muted);margin-top:8px}
+.empty{color:var(--muted);padding:20px 0}
+.btn{border:1px solid var(--accent);color:var(--accent);background:transparent;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:12.5px;font-weight:600}
+.btn.on{background:var(--accent);color:var(--accent-ink)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+svg text{fill:var(--muted);font-family:var(--f-data);font-size:10px}
+.legend{position:absolute;left:max(12px,env(safe-area-inset-left,0px));bottom:calc(12px + env(safe-area-inset-bottom,0px));z-index:500;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:11.5px;min-width:200px}
+.legend .ramp{display:flex;height:10px;border-radius:3px;overflow:hidden;margin:5px 0 3px}
+.legend .ramp span{flex:1}
+.legend .lb{display:flex;justify-content:space-between;font-family:var(--f-data);font-size:10.5px;color:var(--muted)}
+.count{font-family:var(--f-data);font-size:12px;color:var(--muted)}
+/* minimal Leaflet core (stylesheet can't be loaded from CDN) */
+.leaflet-pane,.leaflet-tile,.leaflet-marker-icon,.leaflet-marker-shadow,.leaflet-tile-container,.leaflet-pane>svg,.leaflet-pane>canvas,.leaflet-zoom-box,.leaflet-image-layer,.leaflet-layer{position:absolute;left:0;top:0}
+.leaflet-container{overflow:hidden;font-family:var(--f-body);background:var(--water);outline-offset:1px;-webkit-tap-highlight-color:transparent}
+.leaflet-container .leaflet-overlay-pane svg{max-width:none!important;max-height:none!important}
+.leaflet-pane{z-index:400}.leaflet-overlay-pane{z-index:400}.leaflet-marker-pane{z-index:600}.leaflet-tooltip-pane{z-index:650}.leaflet-popup-pane{z-index:700}
+.leaflet-map-pane canvas{z-index:100}.leaflet-map-pane svg{z-index:200}
+.leaflet-control{position:relative;z-index:800;pointer-events:auto;float:left;clear:both}
+.leaflet-top,.leaflet-bottom{position:absolute;z-index:1000;pointer-events:none}
+.leaflet-top{top:0}.leaflet-right{right:0}.leaflet-bottom{bottom:0}.leaflet-left{left:0}
+.leaflet-right .leaflet-control{float:right;margin-right:10px}.leaflet-top .leaflet-control{margin-top:10px}.leaflet-left .leaflet-control{margin-left:10px}
+.leaflet-zoom-animated{transform-origin:0 0}
+.leaflet-zoom-anim .leaflet-zoom-animated{transition:transform .25s cubic-bezier(0,0,.25,1)}
+.leaflet-interactive{cursor:pointer}
+.leaflet-grab{cursor:grab}.leaflet-dragging .leaflet-grab{cursor:move}
+.leaflet-bar{border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--panel)}
+.leaflet-bar a{display:block;width:30px;height:30px;line-height:30px;text-align:center;text-decoration:none;color:var(--ink);font:600 18px/30px var(--f-body);border-bottom:1px solid var(--line)}
+.leaflet-bar a:last-child{border-bottom:0}
+.leaflet-control-attribution{background:color-mix(in srgb,var(--panel) 85%,transparent);font-size:10.5px;padding:1px 6px;color:var(--muted)}
+.leaflet-control-attribution a{color:var(--muted)}
+.leaflet-tooltip{position:absolute;padding:5px 8px;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:5px;white-space:nowrap;pointer-events:none;font-size:12px;box-shadow:0 2px 8px rgba(0,0,0,.15)}
+.town-label{font-family:var(--f-display);font-size:12.5px;font-weight:600;color:var(--muted);letter-spacing:.03em;white-space:nowrap;pointer-events:none}
+.mer-label{font-family:var(--f-data);font-size:11px;color:var(--landline);white-space:nowrap;pointer-events:none}
+@media (max-width:860px){
+  main{grid-template-columns:1fr;grid-template-rows:55vh auto}
+  aside{border-left:0;border-top:1px solid var(--line)}
+  .ctrls{margin-left:0}
+}
+@media (prefers-reduced-motion:reduce){.leaflet-zoom-anim .leaflet-zoom-animated{transition:none}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div>
+      <h1>Montney &amp; Duvernay oil wells · Alberta <span id="yr"></span></h1>
+      <div class="sub"><span id="period"></span> Petrinex well production · top <span id="topn">20</span> oil licensees per formation · <span id="cnt" class="count"></span></div>
+    </div>
+    <div class="ctrls">
+      <div class="seg" role="group" aria-label="Formation">
+        <button id="f-all" aria-pressed="true" data-f="all">Both</button>
+        <button id="f-m" aria-pressed="false" data-f="Montney">Montney</button>
+        <button id="f-d" aria-pressed="false" data-f="Duvernay">Duvernay</button>
+      </div>
+      <label for="op">Licensee <select id="op"></select></label>
+      <label for="top20"><input type="checkbox" id="top20" checked> <span id="toplbl">Top 20 only</span></label>
+      <label for="lat"><input type="checkbox" id="lat" checked> Laterals</label>
+    </div>
+  </header>
+  <main>
+    <div id="map" aria-label="Map of wells"></div>
+    <aside>
+      <div class="tabs" role="tablist">
+        <button role="tab" id="t-well" aria-selected="true" data-t="well">Well</button>
+        <button role="tab" id="t-ops" aria-selected="false" data-t="ops">Licensees</button>
+        <button role="tab" id="t-cmp" aria-selected="false" data-t="cmp">Compare <span id="cmpn"></span></button>
+      </div>
+      <div class="pane" id="pane"></div>
+    </aside>
+  </main>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script>
+const DATA=/*__WELL_DATA__*/null;
+const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+let M=[], TOP=20, TOTAL_DAYS=1;
+const mlabel=(m,yr)=>MON[+m.slice(5)-1]+(yr?' '+m.slice(2,4):'');
+let D=null, W=[], state={f:'all',op:'',top20:true,lat:true,tab:'well',sel:null,radius:5,cmp:[]};
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const fmt=(x,d=0)=>x==null||isNaN(x)?'—':Number(x).toLocaleString('en-CA',{maximumFractionDigits:d,minimumFractionDigits:d});
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const title=s=>String(s||'').toLowerCase().replace(/\b([a-z])/g,c=>c.toUpperCase()).replace(/\bUlc\b/,'ULC').replace(/\bArc\b/,'ARC').replace(/\bTaqa\b/,'TAQA').replace(/\bHwn\b/,'HWN').replace(/\bGmt\b/,'GMT');
+
+// --- map base ---
+const map=L.map('map',{preferCanvas:true,zoomControl:true,attributionControl:true,minZoom:5,maxZoom:14}).setView([54.6,-116.5],6);
+map.attributionControl.setPrefix(false).addAttribution('Wells: Petrinex &amp; AER ST37 public data · Alberta boundary simplified · Leaflet');
+const AB=[[49,-110],[60,-110],[60,-120],[54,-120],[53.6,-119.6],[53.1,-118.6],[52.75,-118.2],[52.25,-117.3],[51.8,-116.8],[51.4,-116.3],[50.85,-115.6],[50.3,-114.9],[49.55,-114.6],[49,-114.07]];
+let base=L.layerGroup().addTo(map);
+function drawBase(){
+  base.clearLayers();
+  L.polygon(AB,{color:css('--landline'),weight:1.2,fillColor:css('--land'),fillOpacity:1,interactive:false}).addTo(base);
+  [[114,'W5 meridian · 114°W'],[118,'W6 meridian · 118°W']].forEach(([lon,t])=>{
+    const s=lon===114?49:49; const e=60;
+    L.polyline([[49,-lon],[60,-lon]],{color:css('--landline'),weight:1,dashArray:'4 5',interactive:false}).addTo(base);
+    L.marker([59.3,-lon],{icon:L.divIcon({className:'mer-label',html:t,iconSize:null,iconAnchor:[-4,0]}),interactive:false}).addTo(base);
+  });
+  [['Grande Prairie',55.17,-118.80],['Fox Creek',54.40,-116.80],['Whitecourt',54.14,-115.68],['Edmonton',53.55,-113.49],['Red Deer',52.27,-113.81],['Calgary',51.05,-114.07],['Valleyview',55.07,-117.28],['Grande Cache',53.88,-119.13],['Peace River',56.23,-117.29],['Drayton Valley',53.22,-114.98],['Rocky Mtn House',52.38,-114.92],['Swan Hills',54.71,-115.40],['Slave Lake',55.28,-114.77]].forEach(([n,a,o])=>{
+    L.circleMarker([a,o],{radius:2.5,color:css('--muted'),weight:1,fillColor:css('--muted'),fillOpacity:1,interactive:false}).addTo(base);
+    L.marker([a,o],{icon:L.divIcon({className:'town-label',html:n,iconSize:null,iconAnchor:[-5,7]}),interactive:false}).addTo(base);
+  });
+}
+const wellLayer=L.layerGroup().addTo(map);
+const selLayer=L.layerGroup().addTo(map);
+const canvas=L.canvas({padding:.3});
+
+// --- color ramp on avg monthly BOE (quantile breaks over all wells) ---
+let BR=[];
+function rampColor(v){const c=['--r0','--r1','--r2','--r3','--r4'];let i=0;while(i<BR.length&&v>BR[i])i++;return css(c[i]);}
+function radius(v){return Math.max(2.5,Math.min(9,2+Math.sqrt(v/400)));}
+const mid=w=>w.bh?[(w.sh[0]+w.bh[0])/2,(w.sh[1]+w.bh[1])/2]:w.sh;
+const pt=w=>w.bh||w.sh;
+
+function visible(){
+  return W.filter(w=>(state.f==='all'||w.f===state.f)&&(!state.top20||w.rk<=TOP)&&(!state.op||w.l===state.op));
+}
+function render(){
+  wellLayer.clearLayers();
+  const v=visible().sort((a,b)=>a.amb-b.amb);
+  const duv=css('--duv');
+  if(state.lat) v.forEach(w=>{ if(w.bh) L.polyline([w.sh,w.bh],{renderer:canvas,color:w.f==='Duvernay'?duv:css('--muted'),weight:1,opacity:.55,interactive:false}).addTo(wellLayer);});
+  v.forEach(w=>{
+    const m=L.circleMarker(pt(w),{renderer:canvas,radius:radius(w.amb),color:w.f==='Duvernay'?duv:css('--panel'),weight:w.f==='Duvernay'?1.6:.8,fillColor:rampColor(w.amb),fillOpacity:.92});
+    m.bindTooltip(`<b>${esc(w.u)}</b><br>${esc(title(w.l))} · ${w.f}<br>${fmt(w.amb)} BOE/month avg`,{direction:'top',offset:[0,-4]});
+    m.on('click',()=>select(w.id));
+    m.addTo(wellLayer);
+  });
+  document.getElementById('cnt').textContent=`${fmt(v.length)} wells shown`;
+  drawSel();
+}
+function drawSel(){
+  selLayer.clearLayers();
+  const s=W.find(w=>w.id===state.sel); const sc=css('--sel');
+  state.cmp.forEach(id=>{const w=W.find(x=>x.id===id); if(w) L.circleMarker(pt(w),{radius:radius(w.amb)+4,color:css('--accent'),weight:2,fill:false,interactive:false}).addTo(selLayer);});
+  if(!s) return;
+  if(s.bh) L.polyline([s.sh,s.bh],{color:sc,weight:3,interactive:false}).addTo(selLayer);
+  L.circleMarker(pt(s),{radius:radius(s.amb)+5,color:sc,weight:2.5,fill:false,interactive:false}).addTo(selLayer);
+  L.circle(mid(s),{radius:state.radius*1000,color:sc,weight:1,dashArray:'3 4',fillOpacity:.04,fillColor:sc,interactive:false}).addTo(selLayer);
+}
+
+// --- neighbour analysis ---
+function km(a,b){const R=6371,t=Math.PI/180,dl=(b[0]-a[0])*t,dn=(b[1]-a[1])*t;const x=Math.sin(dl/2)**2+Math.cos(a[0]*t)*Math.cos(b[0]*t)*Math.sin(dn/2)**2;return 2*R*Math.asin(Math.sqrt(x));}
+function neighbours(s){
+  const c=mid(s);
+  return W.filter(w=>w.f===s.f&&w.id!==s.id&&km(c,mid(w))<=state.radius).map(w=>({w,d:km(c,mid(w))}));
+}
+
+// --- charts ---
+function bars(series,{h=120}={}){
+  const wdt=360,pl=40,pb=18,pt_=8;const n=M.length;const k=series.length;
+  const mx=Math.max(1,...series.flatMap(s=>s.v));const nice=niceMax(mx);
+  const bw=(wdt-pl-6)/n; const Y=v=>h-pb-(h-pt_-pb)*v/nice;
+  let g='';for(let i=0;i<=3;i++){const y=pt_+(h-pt_-pb)*(1-i/3);g+=`<line x1="${pl}" x2="${wdt-4}" y1="${y}" y2="${y}" stroke="var(--line)" stroke-width="1"/><text x="${pl-5}" y="${y+3}" text-anchor="end">${fmtK(nice*i/3)}</text>`;}
+  if(n<=12){
+    const iw=bw*.78/k;
+    series.forEach((s,j)=>s.v.forEach((v,i)=>{const bh=(h-pt_-pb)*v/nice;const x=pl+i*bw+bw*.11+j*iw;g+=`<rect x="${x.toFixed(1)}" y="${(h-pb-bh).toFixed(1)}" width="${(iw-1).toFixed(1)}" height="${Math.max(0,bh).toFixed(1)}" fill="${s.c}" rx="1.5"><title>${s.name||''} ${M[i]}: ${fmt(v)} BOE</title></rect>`;}));
+  }else{
+    series.forEach(s=>{const pts=s.v.map((v,i)=>`${(pl+i*bw+bw/2).toFixed(1)},${Y(v).toFixed(1)}`).join(' ');
+      if(k===1) g+=`<polygon points="${(pl+bw/2).toFixed(1)},${h-pb} ${pts} ${(pl+(n-1)*bw+bw/2).toFixed(1)},${h-pb}" fill="${s.c}" fill-opacity=".18"/>`;
+      g+=`<polyline points="${pts}" fill="none" stroke="${s.c}" stroke-width="1.6" stroke-linejoin="round"/>`;});
+  }
+  const step=n<=12?1:Math.ceil(n/8);
+  M.forEach((m,i)=>{if(i%step===0) g+=`<text x="${pl+i*bw+bw/2}" y="${h-4}" text-anchor="middle">${m}</text>`;});
+  return `<svg viewBox="0 0 ${wdt} ${h}" width="100%" role="img" aria-label="Monthly BOE chart">${g}</svg>`;
+}
+function niceMax(x){const p=10**Math.floor(Math.log10(x));for(const m of [1,1.5,2,2.5,3,4,5,6,8,10]) if(m*p>=x) return m*p;return 10*p;}
+function fmtK(v){return v>=1000?(v/1000).toFixed(v>=10000?0:1)+'k':Math.round(v);}
+
+// --- panes ---
+function paneWell(){
+  const s=W.find(w=>w.id===state.sel);
+  if(!s) return `<div class="eyebrow">How to use</div><h2>Click any well on the map</h2>
+   <p class="note">Each dot is a producing oil well's bottom-hole location; the thin line is its surface-to-bottom-hole trace (the horizontal lateral). Dot colour and size show average monthly BOE across the months it produced in ${document.getElementById('period').textContent}. Duvernay wells have a blue outline.</p>
+   <p class="note">Selecting a well compares it with every other well in the same formation within a chosen radius, which is where wells at similar depth in the same zone start to separate.</p>
+   <p><button class="btn" id="demo">Show an example well</button></p>`;
+  const nb=neighbours(s); const all=[{w:s,d:0},...nb].sort((a,b)=>b.w.amb-a.w.amb);
+  const rank=all.findIndex(x=>x.w.id===s.id)+1; const pct=all.length>1?Math.round(100*(all.length-rank)/(all.length-1)):null;
+  const med=median(nb.map(x=>x.w.amb));
+  const inCmp=state.cmp.includes(s.id);
+  return `<div class="eyebrow">${s.f==='Montney'?'<span class="pill m">Montney</span>':'<span class="pill d">Duvernay</span>'} · ${esc(s.fd?title(s.fd):'')}</div>
+  <h2>${esc(title(s.l))}</h2>
+  <div class="uwi">${esc(s.u)} · ${esc(s.n)}</div>
+  <div class="big"><div><div class="v">${fmt(s.amb)}</div><div class="u">avg BOE / producing month</div></div>
+  <div><div class="v">${fmt(s.bpd,1)}</div><div class="u">avg BOE / day (${s.on} mo on)</div></div></div>
+  ${bars([{v:s.boe,c:css('--r3'),name:'BOE'}])}
+  <div class="row"><button class="btn ${inCmp?'on':''}" id="pin">${inCmp?'Pinned to compare':'Pin to compare'}</button></div>
+  <dl class="kv">
+   <div><dt>Max TVD</dt><dd>${fmt(s.tvd)} m</dd></div>
+   <div><dt>Total depth (MD)</dt><dd>${fmt(s.md)} m</dd></div>
+   <div><dt>SH→BH reach</dt><dd>${fmt(s.reach)} m</dd></div>
+   <div><dt>Spud date</dt><dd>${esc(s.sp||'—')}</dd></div>
+   <div><dt>Oil in period</dt><dd>${fmt(s.to)} bbl</dd></div>
+   <div><dt>GOR</dt><dd>${fmt(s.gor)} scf/bbl</dd></div>
+   <div><dt>Water cut</dt><dd>${fmt(s.wc,1)} %</dd></div>
+   <div><dt>Status</dt><dd>${esc(s.st)}</dd></div>
+   <div><dt>Pool</dt><dd>${esc(s.p||'Not assigned')}</dd></div>
+   <div><dt>Formation from</dt><dd>${esc(s.ts==='Pool'?'Pool code':'Licence terminating fm')}</dd></div>
+  </dl>
+  <h3>Same-formation neighbours</h3>
+  <div class="row"><label for="rad" class="note" style="margin:0">Radius</label>
+   <select id="rad">${[2,5,10,20].map(r=>`<option value="${r}" ${r===state.radius?'selected':''}>${r} km</option>`).join('')}</select>
+   <span class="note" style="margin:0">${nb.length} ${s.f} oil wells</span></div>
+  ${nb.length?`<div class="pct"><span class="note" style="margin:0">P${pct}</span><div class="bar"><div class="tick" style="left:${pct}%"></div></div></div>
+  <p class="note">Ranks ${rank} of ${all.length} on avg monthly BOE. Neighbour median ${fmt(med)} BOE/month, so this well is at ${med?fmt(100*s.amb/med):'—'}% of the local median.</p>
+  <div class="tw"><table><thead><tr><th>Licensee</th><th class="n">BOE/mo</th><th class="n">TVD</th><th class="n">Reach</th><th class="n">Spud</th><th class="n">km</th></tr></thead><tbody>
+  ${all.slice(0,40).map(x=>`<tr class="click ${x.w.id===s.id?'me':''}" data-id="${x.w.id}"><td>${esc(title(x.w.l)).slice(0,22)}</td><td class="n">${fmt(x.w.amb)}</td><td class="n">${fmt(x.w.tvd)}</td><td class="n">${fmt(x.w.reach)}</td><td class="n">${esc((x.w.sp||'').slice(0,4))}</td><td class="n">${fmt(x.d,1)}</td></tr>`).join('')}
+  </tbody></table></div>${all.length>40?`<p class="note">Showing top 40 of ${all.length}.</p>`:''}`
+  :`<p class="note">No other ${s.f} oil wells within ${state.radius} km. Try a larger radius.</p>`}
+  <p class="note">TVD, depth and reach come from AER/Petrinex well records. Reach is the straight-line surface-to-bottom-hole distance, a rough proxy for lateral length. Completion size, landing interval and rock quality aren't in public production data; those are the variables to load alongside this in Mercury.</p>`;
+}
+function median(a){if(!a.length)return null;const b=[...a].sort((x,y)=>x-y);const m=b.length>>1;return b.length%2?b[m]:(b[m-1]+b[m])/2;}
+function paneOps(){
+  const fs=state.f==='all'?['Montney','Duvernay']:[state.f];
+  return fs.map(f=>{
+    const g={};W.filter(w=>w.f===f).forEach(w=>{const o=g[w.l]||(g[w.l]={l:w.l,rk:w.rk,oil:0,boe:0,n:0,amb:[]});o.oil+=w.to;o.boe+=w.boe.reduce((a,b)=>a+b,0);o.n++;o.amb.push(w.amb);});
+    const rows=Object.values(g).sort((a,b)=>a.rk-b.rk).slice(0,TOP);
+    const tot=Object.values(g).reduce((a,o)=>a+o.oil,0);
+    return `<div class="eyebrow">${f} · ranked by crude oil, ${document.getElementById('period').textContent}</div><h2>Top ${TOP} ${f} oil licensees</h2>
+    <p class="note">${document.getElementById('period').textContent} (${fmt(TOTAL_DAYS)} days). All ${Object.keys(g).length} licensees together: ${fmt(tot/TOTAL_DAYS)} bbl/d oil. Click a row to show only that licensee.</p>
+    <div class="tw"><table><thead><tr><th class="n">#</th><th>Licensee</th><th class="n">Oil bbl/d</th><th class="n">Wells</th><th class="n">Median BOE/mo</th></tr></thead><tbody>
+    ${rows.map(o=>`<tr class="click ${state.op===o.l?'me':''}" data-op="${esc(o.l)}"><td class="n">${o.rk}</td><td>${esc(title(o.l))}</td><td class="n">${fmt(o.oil/TOTAL_DAYS)}</td><td class="n">${o.n}</td><td class="n">${fmt(median(o.amb))}</td></tr>`).join('')}
+    </tbody></table></div>`;}).join('<div style="height:18px"></div>')+
+    `<p class="note">The median BOE per well shows how evenly each licensee's wells perform. A big gap between total output and per-well median often means a few standout wells carry the program.</p>`;
+}
+function paneCmp(){
+  const ws=state.cmp.map(id=>W.find(w=>w.id===id)).filter(Boolean);
+  if(!ws.length) return `<div class="eyebrow">Compare</div><h2>Pin up to 6 wells</h2><p class="note">Select a well on the map, then choose “Pin to compare”. Pinned wells appear here side by side with their monthly BOE and the attributes that usually explain the spread: depth, reach, vintage, gas-oil ratio and water cut.</p>`;
+  const pal=['--r3','--duv','--accent','--r2','--sel','--muted'].map(css);
+  return `<div class="eyebrow">Compare · ${ws.length} wells</div><h2>Monthly BOE, ${document.getElementById('period').textContent}</h2>
+  ${bars(ws.map((w,i)=>({v:w.boe,c:pal[i],name:w.u})),{h:150})}
+  <div class="tw"><table><thead><tr><th></th><th>Well</th><th class="n">BOE/mo</th><th class="n">TVD</th><th class="n">Reach</th><th class="n">GOR</th><th class="n">WC%</th><th></th></tr></thead><tbody>
+  ${ws.map((w,i)=>`<tr><td><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${pal[i]}"></span></td><td class="click" data-id="${w.id}" style="cursor:pointer"><div style="font-family:var(--f-data);font-size:11.5px">${esc(w.u)}</div><div class="note" style="margin:0">${esc(title(w.l)).slice(0,24)} · ${w.f}</div></td><td class="n">${fmt(w.amb)}</td><td class="n">${fmt(w.tvd)}</td><td class="n">${fmt(w.reach)}</td><td class="n">${fmt(w.gor)}</td><td class="n">${fmt(w.wc,0)}</td><td><button class="btn" data-unpin="${w.id}" aria-label="Remove ${esc(w.u)}">×</button></td></tr>`).join('')}
+  </tbody></table></div>
+  <p class="note">When wells at similar TVD and reach still differ several-fold, the difference usually sits in data public production can't show: completion design, landing interval, reservoir pressure and natural fractures.</p>`;
+}
+function renderPane(){
+  const p=document.getElementById('pane');
+  p.innerHTML=state.tab==='well'?paneWell():state.tab==='ops'?paneOps():paneCmp();
+  document.querySelectorAll('.tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.t===state.tab));
+  document.getElementById('cmpn').textContent=state.cmp.length?`(${state.cmp.length})`:'';
+  p.querySelectorAll('tr[data-id],td[data-id]').forEach(r=>r.onclick=()=>select(r.dataset.id,true));
+  p.querySelectorAll('tr[data-op]').forEach(r=>r.onclick=()=>{state.op=state.op===r.dataset.op?'':r.dataset.op;syncOp();render();renderPane();});
+  p.querySelectorAll('[data-unpin]').forEach(b=>b.onclick=()=>{state.cmp=state.cmp.filter(x=>x!==b.dataset.unpin);drawSel();renderPane();});
+  const pin=document.getElementById('pin'); if(pin) pin.onclick=()=>{const id=state.sel;if(state.cmp.includes(id))state.cmp=state.cmp.filter(x=>x!==id);else{state.cmp.push(id);if(state.cmp.length>6)state.cmp.shift();}drawSel();renderPane();};
+  const rad=document.getElementById('rad'); if(rad) rad.onchange=()=>{state.radius=+rad.value;drawSel();renderPane();};
+  const demo=document.getElementById('demo'); if(demo) demo.onclick=()=>{const w=W.filter(w=>w.rk===1&&w.f==='Montney').sort((a,b)=>b.amb-a.amb)[5]||W[0];select(w.id,true);};
+}
+function select(id,fly){
+  state.sel=id; state.tab='well';
+  const w=W.find(x=>x.id===id);
+  if(fly&&w) map.flyTo(mid(w),Math.max(map.getZoom(),10),{duration:.6});
+  drawSel(); renderPane();
+}
+function syncOp(){
+  const sel=document.getElementById('op');
+  const ops=[...new Set(W.filter(w=>(state.f==='all'||w.f===state.f)&&(!state.top20||w.rk<=TOP)).map(w=>w.l))].sort();
+  if(state.op&&!ops.includes(state.op)) state.op='';
+  sel.innerHTML=`<option value="">All licensees</option>`+ops.map(o=>`<option ${o===state.op?'selected':''} value="${esc(o)}">${esc(title(o))}</option>`).join('');
+}
+function legend(){
+  const el=L.control({position:'bottomleft'});
+  el.onAdd=()=>{const d=L.DomUtil.create('div','legend');
+    d.innerHTML=`<div class="eyebrow">Avg BOE per producing month</div><div class="ramp">${['--r0','--r1','--r2','--r3','--r4'].map(c=>`<span style="background:var(${c})"></span>`).join('')}</div>
+    <div class="lb"><span>0</span>${BR.map(b=>`<span>${fmtK(b)}</span>`).join('')}<span>max</span></div>
+    <div class="note" style="margin-top:4px">Breaks are quintiles of all ${fmt(W.length)} wells · blue outline = Duvernay</div>`;
+    L.DomEvent.disableClickPropagation(d);return d;};
+  el.addTo(map);
+}
+
+// --- wiring ---
+document.querySelectorAll('.seg button').forEach(b=>b.onclick=()=>{state.f=b.dataset.f;document.querySelectorAll('.seg button').forEach(x=>x.setAttribute('aria-pressed',x===b));syncOp();render();renderPane();});
+document.getElementById('op').onchange=e=>{state.op=e.target.value;render();renderPane();};
+document.getElementById('top20').onchange=e=>{state.top20=e.target.checked;syncOp();render();};
+document.getElementById('lat').onchange=e=>{state.lat=e.target.checked;render();};
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{state.tab=b.dataset.t;renderPane();});
+const mq=window.matchMedia('(prefers-color-scheme: dark)');
+const rerender=()=>{drawBase();render();};
+mq.addEventListener&&mq.addEventListener('change',rerender);
+new MutationObserver(rerender).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+
+drawBase();
+Promise.resolve(DATA).then(d=>{
+  if(!d) throw new Error('no data');
+  D=d; W=d.wells; TOP=d.top||20; TOTAL_DAYS=d.total_days;
+  const multiYear=d.months[0].slice(0,4)!==d.months[d.months.length-1].slice(0,4);
+  M=d.months.map(m=>mlabel(m,multiYear));
+  const first=mlabel(d.months[0],true), last=mlabel(d.months[d.months.length-1],true);
+  document.getElementById('period').textContent=first+' – '+last;
+  document.getElementById('yr').textContent=multiYear?d.months[0].slice(0,4)+'–'+d.months[d.months.length-1].slice(0,4):d.months[0].slice(0,4);
+  document.getElementById('topn').textContent=TOP; document.getElementById('toplbl').textContent='Top '+TOP+' only';
+  const v=W.map(w=>w.amb).sort((a,b)=>a-b); BR=[.2,.4,.6,.8].map(q=>v[Math.floor(q*(v.length-1))]);
+  legend(); syncOp(); render(); renderPane();
+}).catch(()=>{document.getElementById('pane').innerHTML='<p class="empty">No well data in this file. This is the template: run <code>python pipeline.py</code> and open the <b>map.html</b> it writes in the output folder.</p>';});
+</script>
+</body>
+</html>
